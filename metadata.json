@@ -1,0 +1,7 @@
+{
+  "name": "VoiceBuddy - AI English Tutor",
+  "description": "An interactive AI-powered English language tutor that helps you practice speaking and pronunciation through natural real-time conversations.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
