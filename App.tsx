@@ -87,7 +87,7 @@ const App: React.FC = () => {
     });
     
     try {
-      const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: (import.meta as any).env.VITE_API_KEY });
       
       // Initialize Audio Contexts
       inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
