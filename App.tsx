@@ -34,6 +34,11 @@ const App: React.FC = () => {
   const currentInputTranscription = useRef('');
   const currentOutputTranscription = useRef('');
 
+  // Auto-reconnect refs
+  const shouldAutoReconnect = useRef(false);
+  const currentScenarioRef = useRef<Scenario | null>(null);
+  const startSessionRef = useRef<(scenario?: Scenario, isReconnect?: boolean) => Promise<void>>();
+
   // Auto scroll to bottom of chat
   useEffect(() => {
     if (scrollRef.current) {
@@ -50,14 +55,15 @@ const App: React.FC = () => {
   }, []);
 
   const handleStopSession = useCallback(() => {
+    shouldAutoReconnect.current = false; // User manually stopped — no reconnect
     if (sessionRef.current) {
       sessionRef.current.close();
       sessionRef.current = null;
     }
     setIsActive(false);
     stopAudio();
-    if (inputAudioContextRef.current) inputAudioContextRef.current.close();
-    if (outputAudioContextRef.current) outputAudioContextRef.current.close();
+    if (inputAudioContextRef.current) { inputAudioContextRef.current.close(); inputAudioContextRef.current = null; }
+    if (outputAudioContextRef.current) { outputAudioContextRef.current.close(); outputAudioContextRef.current = null; }
   }, [stopAudio]);
 
   const handleReset = useCallback(() => {
@@ -76,15 +82,26 @@ const App: React.FC = () => {
     }
   }, [handleStopSession]);
 
-  const startSession = useCallback(async (scenario?: Scenario) => {
+  const startSession = useCallback(async (scenario?: Scenario, isReconnect = false) => {
     setIsConnecting(true);
-    setMessages([]);
-    setStats({
-        turns: 0,
-        words: 0,
-        startTime: new Date(),
-        feedbackCount: 0,
-    });
+    if (!isReconnect) {
+      setMessages([]);
+      setStats({
+          turns: 0,
+          words: 0,
+          startTime: new Date(),
+          feedbackCount: 0,
+      });
+    } else {
+      // Add a visual separator so the user knows the session was renewed
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        text: '🔄 Session renewed automatically — continuing your practice!',
+        timestamp: new Date(),
+      }]);
+    }
+    shouldAutoReconnect.current = true;
+    currentScenarioRef.current = scenario ?? null;
     
     try {
       const ai = new GoogleGenAI({ apiKey: (import.meta as any).env.VITE_API_KEY });
@@ -236,6 +253,15 @@ const App: React.FC = () => {
           },
           onclose: () => {
             setIsActive(false);
+            stopAudio();
+            if (inputAudioContextRef.current) { inputAudioContextRef.current.close(); inputAudioContextRef.current = null; }
+            if (outputAudioContextRef.current) { outputAudioContextRef.current.close(); outputAudioContextRef.current = null; }
+            // Auto-reconnect if session was closed by server (not by user)
+            if (shouldAutoReconnect.current) {
+              setTimeout(() => {
+                startSessionRef.current?.(currentScenarioRef.current ?? undefined, true);
+              }, 2000);
+            }
           }
         }
       });
@@ -246,6 +272,9 @@ const App: React.FC = () => {
       setIsConnecting(false);
     }
   }, [handleStopSession, stopAudio, sourceMaterial]);
+
+  // Keep ref in sync so onclose can always call the latest startSession
+  startSessionRef.current = startSession;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col w-full">
